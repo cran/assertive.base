@@ -18,7 +18,12 @@
 #' @export
 cause <- function(x)
 {
-  attr(x, "cause")
+  y <- attr(x, "cause")
+  if(is.null(y))
+  {
+    return(noquote(character(length(x))))
+  }
+  y
 }
 
 #' @rdname cause
@@ -76,7 +81,7 @@ print.scalar_with_cause <- function(x, ...)
 {
   if(length(x) != 1L)
   {
-    stop("Bug in assertive; x should have length 1.") 
+    stop("x is malformed; it should have length 1.", domain = NA) 
   }
   print(x[1])
   cat("Cause of failure: ", cause(x), "\n")
@@ -131,15 +136,21 @@ print.vector_with_cause <- function(x, na_ignore = FALSE, n_to_show = 10, ...)
   # creates all the translation strings
   msg_showing_first <- if(nrow(failures) < n) 
   {
-    gettextf(" (showing the first %d)", nrow(failures))
+    paste0(
+      " ", 
+      gettextf(
+        "(showing the first %d)", 
+        nrow(failures), 
+        domain = "R-assertive.base"
+      )
+    )
   } else ""
-  msg_n_failures <- gettextf(
-    "There %s %d %s%s:\n",
-    ngettext(n, "was", "were"),
+  msg_n_failures <- ngettext(
     n,
-    ngettext(n, "failure", "failures"),
-    msg_showing_first
+    "There was %d failure%s:\n",
+    "There were %d failures%s:\n",
+    domain = "R-assertive.base"
   )
-  cat(msg_n_failures)
+  cat(enc2utf8(sprintf(msg_n_failures, n, msg_showing_first)))
   print(failures)
 }

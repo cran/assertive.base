@@ -14,17 +14,16 @@
 #' cause an error; otherwise they do not.  Like \code{na.rm} in many
 #' stats package functions, except that the position of the failing
 #' values does not change.
+#' @param severity How severe should the consequences of the assertion be?  
+#' Either \code{"stop"}, \code{"warning"}, \code{"message"}, or \code{"none"}.
 #' @return \code{FALSE} with the attribute \code{message}, as provided
 #' in the input.
 #' @note Missing values are considered as \code{FALSE} for the purposes of
 #' whether or not an error is thrown.
 #' @export
-assert_engine <- function(predicate, ..., msg, what = c("all", "any"), na_ignore = FALSE)
+assert_engine <- function(predicate, ..., msg, what = c("all", "any"), na_ignore = FALSE, severity = c("stop", "warning", "message", "none"))
 {
-  handler_type <- match.arg(
-    getOption("assertive.severity"),
-    c("stop", "warning", "message", "none")
-  )
+  handler_type <- match.arg(severity)
   dots <- list(...)
   return_value <- if(length(dots) > 0) dots[[1]] else NULL
   if(handler_type == "none") 
@@ -58,7 +57,7 @@ assert_engine <- function(predicate, ..., msg, what = c("all", "any"), na_ignore
     if(!what(really_ok))
     {
       # Append first few failure values and positions to the error message.
-      msg <- paste(msg, print_and_capture(ok), sep = "\n")
+      msg <- paste(enc2utf8(msg), print_and_capture(ok), sep = "\n")
       give_feedback(handler_type, msg)
     }
   }
@@ -72,12 +71,14 @@ give_feedback <- function(handler_type, msg)
   )
   simple <- switch(
     handler_type,
-    stop = simpleError,
-    warning = simpleWarning,
-    message = simpleMessage
+    stop = assertionError,
+    warning = assertionWarning,
+    message = assertionMessage
   )
   # Throw error/warning/message
   caller <- sys.call(-3)
+  # UTF-8 characters do not display correctly under Windows
+  # http://stackoverflow.com/q/32696241/134830
   handler(simple(msg, caller))
 }
 
