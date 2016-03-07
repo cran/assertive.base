@@ -21,7 +21,7 @@
 #' @note Missing values are considered as \code{FALSE} for the purposes of
 #' whether or not an error is thrown.
 #' @export
-assert_engine <- function(predicate, ..., msg, what = c("all", "any"), na_ignore = FALSE, severity = c("stop", "warning", "message", "none"))
+assert_engine <- function(predicate, ..., msg = "The assertion failed.", what = c("all", "any"), na_ignore = FALSE, severity = c("stop", "warning", "message", "none"))
 {
   handler_type <- match.arg(severity)
   dots <- list(...)
@@ -69,7 +69,7 @@ give_feedback <- function(handler_type, msg)
   handler <- match.fun(
     handler_type
   )
-  simple <- switch(
+  ass_condition <- switch(
     handler_type,
     stop = assertionError,
     warning = assertionWarning,
@@ -77,9 +77,10 @@ give_feedback <- function(handler_type, msg)
   )
   # Throw error/warning/message
   caller <- sys.call(-3)
-  # UTF-8 characters do not display correctly under Windows
+  # UTF-8 characters do not display correctly under Windows for some 
+  # LC_CTYPE locale values, but there isn't much assertive can do about that.
   # http://stackoverflow.com/q/32696241/134830
-  handler(simple(msg, caller))
+  handler(ass_condition(msg, caller))
 }
 
 #' FALSE, with a cause of failure.
@@ -93,9 +94,9 @@ give_feedback <- function(handler_type, msg)
 #' @export
 false <- function(...)
 {
-  msg <- if(length(list(...)) > 0L) sprintf(...) else ""
+  msg <- if(nargs() > 0L) sprintf(...) else ""
   x <- FALSE
-  cause(x) <- msg
+  cause(x) <- msg[1]
   class(x) <- c("scalar_with_cause", "logical")
   x
 }
@@ -111,9 +112,9 @@ false <- function(...)
 #' @export
 na <- function(...)
 {
-  msg <- if(length(list(...)) > 0L) sprintf(...) else ""
+  msg <- if(nargs() > 0L) sprintf(...) else ""
   x <- NA
-  cause(x) <- msg
+  cause(x) <- msg[1]
   class(x) <- c("scalar_with_cause", "logical")
   x
 }

@@ -30,9 +30,7 @@ bapply <- function(x, predicate, ...)
 #' isn't checked; it is up to the developer of the assertion to make
 #' sure that this condition holds.
 #' @examples
-#' \dontrun{
 #' call_and_name(is.finite, c(1, Inf, NA))
-#' }
 #' @seealso \code{\link{cause}} and \code{\link{na}}.
 #' @export
 call_and_name <- function(fn, x, ...)
@@ -45,33 +43,60 @@ call_and_name <- function(fn, x, ...)
 
 #' Run code without stopping
 #' 
-#' Runs code without stopping, warnings and errors are only printed.
-#' @param ... Passed to \code{tryCatch}.
-#' @return The expression that was passed in is run.
+#' Runs code without stopping for warnings or errors.
+#' @param expr Code to execute.
+#' @return A list containing the results of evaluating each call in \code{expr}.
 #' @note This function is dangerous, since it overrides warnings and errors.
-#' Its intended use is for documenting examples of errors.
+#' Its intended use is for documenting examples of warnings and errors.
+#' @seealso \code{\link[base]{warning}} and \code{\link[base]{stop}} for 
+#' generating warnings and errors respectively; \code{\link[base]{try}} and
+#' \code{\link[base]{conditions}} for handling them.
 #' @examples
-#' dont_stop(warning("!!!"))
-#' dont_stop(stop("!!!"))
-#' f <- function() g()
-#' g <- function() stop("!!!")
-#' dont_stop(f())
+#' dont_stop({
+#'   warning("a warning")
+#'   x <- 1
+#'   stop("an error")
+#'   y <- sqrt(exp(x + 1))
+#'   assert_is_identical_to_true(y)
+#'   y > 0
+#' })
 #' @export
-dont_stop <- function(...)
+dont_stop <- function(expr)
 {
-  # The expression, without dont_stop().
-  cl <- sys.call()[[2]]
-  p <- function(e) 
+  this_env <- sys.frame(sys.nframe())
+  
+  # Split the expression up into a list of calls
+  subbed_expr <- substitute(expr, this_env)
+  # Temporarily wrap expr in braces, if it isn't already
+  brace <- quote(`{`)
+  if(!identical(subbed_expr[[1L]], brace))
   {
-    # If the error call claims to be to doTryCatch, then nothing interesting
-    # was captured, so use the parent call that we captured earlier.
-    if(identical(e$call[[1]], as.name("doTryCatch")))
-    {
-      e$call <- cl
-    }
-    print(e)
+    subbed_expr <- c(brace, subbed_expr)
   }
-  tryCatch(..., warning = p, error = p)
+  call_list <- as.list(subbed_expr)[-1L] # -1 to ignore brace again
+  names(call_list) <- vapply(
+    call_list, 
+    function(x) 
+    {
+      paste0(deparse(x), collapse = "")
+    }, 
+    character(1)
+  )
+  
+  handler <- function(e)
+  {
+    e["call"] <- list(NULL) # Override the condition's call
+    e
+  }
+  
+  # Evaluate each one in turn
+  lapply(
+    call_list,
+    function(calli)
+    {
+      tryCatch(eval(calli, this_env), warning = handler, error = handler)
+    }
+  )
 }
 
 #' Get the name of a variable in the parent frame
@@ -101,6 +126,8 @@ get_name_in_parent <- function(x)
 #' @param y A list.
 #' @param warn_on_dupes \code{TRUE} or \code{FALSE}.  Should a warning be given 
 #' if both \code{x} and \code{y} have elements with the same name.  See note.
+#' @param allow_unnamed_elements \code{TRUE} or \code{FALSE}. Should unnamed
+#' elements be allowed?
 #' @param ... Ignored.
 #' @return A list, combining elements from \code{x} and \code{y}.
 #' @note In the event of elements that are duplicated between \code{x} and 
@@ -111,12 +138,37 @@ get_name_in_parent <- function(x)
 #'   list(foo = 1, bar = 2, baz = 3), 
 #'   list(foo = 4, baz = 5, quux = 6)
 #' )
+#' 
+#' # If unnamed elements are allowed, they are included at the end
+#' merge(
+#'   list("a", foo = 1, "b", bar = 2, baz = 3, "c"), 
+#'   list(foo = 4, "a", baz = 5, "b", quux = 6, "d"),
+#'   allow_unnamed_elements = TRUE
+#' )
 #' @method merge list
 #' @export
-merge.list <- function(x, y, warn_on_dupes = TRUE, ...)
+merge.list <- function(x, y, warn_on_dupes = TRUE, allow_unnamed_elements = FALSE, ...)
 {
   if(is.null(y)) return(x)
   y <- coerce_to(y, "list", get_name_in_parent(y))
+  
+  # Get elements without names
+  x_is_unnamed <- names_never_null(x) == ""
+  y_is_unnamed <- names_never_null(y) == ""
+  if(allow_unnamed_elements)
+  {
+    unnamed_values <- c(x[x_is_unnamed], y[y_is_unnamed])
+    x <- x[!x_is_unnamed]
+    y <- y[!y_is_unnamed]
+  } else
+  {
+    if(any(x_is_unnamed) || any(y_is_unnamed))
+    {
+      stop("There are unnamed elements in x or y, but allow_unnamed_elements = FALSE.")
+    }
+  }
+  
+  # Now deal with named elements
   all_names <- c(names(x), names(y))
   all_values <- c(x, y)
   if(anyDuplicated(all_names) > 0)
@@ -130,12 +182,11 @@ merge.list <- function(x, y, warn_on_dupes = TRUE, ...)
     }
     all_values <- all_values[!duplicated(all_names)]
   }
+  if(allow_unnamed_elements)
+  {
+    all_values <- c(all_values, unnamed_values)
+  }
   all_values
-}
-
-merge.NULL <- function(x, y, ...)
-{
-  return(y)
 }
 
 #' Merge ellipsis args with a list.
@@ -144,6 +195,10 @@ merge.NULL <- function(x, y, ...)
 #'
 #' @param ... Some inputs.
 #' @param l A list.
+#' @param warn_on_dupes \code{TRUE} or \code{FALSE}.  Should a warning be given 
+#' if both \code{x} and \code{y} have elements with the same name.  See note.
+#' @param allow_unnamed_elements \code{TRUE} or \code{FALSE}. Should unnamed
+#' elements be allowed?
 #' @note If any arguments are present in both the \code{...} and \code{l} 
 #' arguments, the \code{...} version takes preference, and a warning is thrown.
 #' @return A list containing the merged inputs.
@@ -156,11 +211,11 @@ merge.NULL <- function(x, y, ...)
 #'   l = list(foo = 4, baz = 5, quux = 6)
 #' )
 #' @export
-merge_dots_with_list <- function(..., l = list())
+merge_dots_with_list <- function(..., l = list(), warn_on_dupes = TRUE, allow_unnamed_elements = FALSE)
 {
   dots <- list(...)
   l <- coerce_to(l, "list", get_name_in_parent(l))
-  merge(dots, l)
+  merge(dots, l, warn_on_dupes = warn_on_dupes)
 }
 
 #' Wrap a string in brackets
@@ -251,27 +306,28 @@ strip_attributes <- function(x)
 #' @param x Input that should be scalar.
 #' @param indexer Either double indexing, \code{"[["} (the default) or
 #' single indexing \code{"["}.
+#' @param .xname Not intended to be used directly.
 #' @return If \code{x} is scalar, it is returned unchanged, otherwise
 #' only the first element is returned, with a warning.
+#' @examples 
+#' dont_stop(use_first(1:5))
 #' @export
-use_first <- function(x, indexer = c("[[", "["))
+use_first <- function(x, indexer = c("[[", "["), .xname = get_name_in_parent(x))
 {
+  len_x <- length(x)
   # Can't use assert_is_non_empty, is_scalar in next lines because those 
   # functions calls this one.
-  if(length(x) == 0L)
+  if(len_x == 0L)
   {
-    stop(sprintf("%s has length 0.", get_name_in_parent(x)))
+    stop(sprintf("%s has length 0.", .xname))
   }
-  if(length(x) == 1L)
+  if(len_x == 1L)
   {
     return(x)
   }
   indexer <- match.fun(match.arg(indexer))
   warning(
-    sprintf(
-      "Only the first value of %s will be used.",
-      sQuote(get_name_in_parent(x))
-    ),
+    sprintf("Only the first value of %s will be used.", .xname),
     call. = FALSE
   )
   indexer(x, 1L)
