@@ -13,7 +13,9 @@ test_that(
       'stop("If you don\'t stop;")' = simpleError("If you don't stop;"),
       'warning("Someone\'s gonna find yo\' ass dead (this is a warning)")' = simpleWarning("Someone's gonna find yo' ass dead (this is a warning)"),
       'warning("Someone\'s gonna poison your food (this is a warning)")' = simpleWarning("Someone's gonna poison your food (this is a warning)"),
-      'stop("Don\'t stop, no no, you\'ll be sorry")' = simpleError("Don\'t stop, no no, you\'ll be sorry")
+      'stop("Don\'t stop, no no, you\'ll be sorry")' = simpleError("Don\'t stop, no no, you\'ll be sorry"),
+      'stop("Don\'t stop, thinking about tomorrow")' = simpleError("Don't stop, thinking about tomorrow"),
+      'stop("Don\'t stop, it\'ll soon be here")' = simpleError("Don't stop, it'll soon be here")
     )
     actual <- dont_stop(
       {
@@ -22,6 +24,10 @@ test_that(
         warning("Someone's gonna find yo' ass dead (this is a warning)")
         warning("Someone's gonna poison your food (this is a warning)")
         stop("Don't stop, no no, you'll be sorry")
+        
+        # Bonus errors for David, Jenny and other Fleetwood Mac fans
+        stop("Don't stop, thinking about tomorrow")
+        stop("Don't stop, it'll soon be here")
       }
     )
     expect_identical(actual, expected)
@@ -41,6 +47,101 @@ test_that(
   }
 )
 
+test_that(
+  "get_name_in_parent works when object exists outside of function",
+  {
+    outside <- 1
+    f <- function(inside) 
+    {
+      get_name_in_parent(inside)
+    }
+    expected <- "outside"
+    actual <- f(outside)
+    expect_identical(actual, expected)
+  }
+)
+
+test_that(
+  "get_name_in_parent works when object doesn't exist outside of function",
+  {
+    f <- function(inside) 
+    {
+      get_name_in_parent(inside)
+    }
+    expected <- "1"
+    actual <- f(1)
+    expect_identical(actual, expected)
+  }
+)
+
+test_that(
+  "get_name_in_parent works with percent inside function call, escape_percent = TRUE",
+  {
+    f <- function(inside) 
+    {
+      get_name_in_parent(inside)
+    }
+    expected <- "1 %%>%% exp"
+    actual <- f(1 %>% exp)
+    expect_identical(actual, expected)
+  }
+)
+
+test_that(
+  "get_name_in_parent works with percent inside function call, escape_percent = FALSE",
+  {
+    f <- function(inside) 
+    {
+      get_name_in_parent(inside, FALSE)
+    }
+    expected <- "1 %>% exp"
+    actual <- f(1 %>% exp)
+    expect_identical(actual, expected)
+  }
+)
+
+test_that(
+  "merge_dots_with_list takes duplicates from ...",
+  {
+    expected <- list(x = 1, y = "b", z = TRUE)
+    expect_warning(
+      actual <- merge_dots_with_list(x = 1, y = "b", l = list(y = "c", z = TRUE)),
+      "Duplicated arguments: y"
+    )
+    expect_equal(actual, expected)
+  }
+)
+
+test_that(
+  "merge_dots_with_list throws an error with unnamed arguments and allow_unnamed_elements = FALSE",
+  {
+    expect_error(
+      merge_dots_with_list(x = 1, "b", l = list(y = "c")),
+      "There are unnamed elements in x or y, but allow_unnamed_elements = FALSE"
+    )
+  }
+)
+
+test_that(
+  "merge_dots_with_list works with unnamed arguments and allow_unnamed_elements = TRUE",
+  {
+    expected <- list(x = 1, y = "c", "b")
+    actual <- merge_dots_with_list(
+      x = 1, "b", l = list(y = "c"), 
+      allow_unnamed_elements = TRUE
+    )
+    expect_equal(actual, expected)
+  }
+)
+
+test_that(
+  "merge_dots_with_list works with no list argument",
+  {
+    expected <- list(x = 1, y = "b")
+    actual <- merge_dots_with_list(x = 1, y = "b")
+    expect_equal(actual, expected)
+  }
+)
 
 test_that(
   "test.parenthesise.character_input.returns_parenthesised_input",  
