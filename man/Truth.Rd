@@ -147,10 +147,11 @@ assert_is_identical_to_true(c(truth = TRUE), allow_attributes = TRUE)
 assert_is_identical_to_false(matrix(FALSE), allow_attributes = TRUE)
 assert_is_identical_to_na(structure(NA, class = "nanana"), allow_attributes = TRUE)
 
-# Vectorized predicates
+# Vectorized predicates (package name explicitly given to prevent
+# problems with testthat name clash)
 x <- c(TRUE, FALSE, NA)
-is_true(x)
-is_false(x)
+assertive.base::is_true(x)
+assertive.base::is_false(x)
 is_na(x)
 
 # ...and their opposites
@@ -166,6 +167,8 @@ assert_any_are_na(x)
 # These tests should fail:
 dont_stop({
   assert_is_identical_to_true(c(truth = TRUE))
+  assert_is_identical_to_true(1)
+  assert_is_identical_to_true(c(TRUE, TRUE))
   assert_is_identical_to_false(matrix(FALSE))
   assert_is_identical_to_na(structure(NA, class = "nanana"))
   assert_all_are_true(x)
