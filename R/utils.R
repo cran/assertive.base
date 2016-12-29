@@ -31,6 +31,15 @@ bapply <- function(x, predicate, ...)
 #' sure that this condition holds.
 #' @examples
 #' call_and_name(is.finite, c(1, Inf, NA))
+#' 
+#' # Make sure that the output is the same size as the input.
+#' # Don't do this:
+#' dont_stop(call_and_name(isTRUE, list(TRUE, FALSE, NA)))
+#' # Do this instead:
+#' call_and_name(
+#'   Vectorize(isTRUE, SIMPLIFY = FALSE),
+#'   list(TRUE, FALSE, NA)
+#' )
 #' @seealso \code{\link{cause}} and \code{\link{na}}.
 #' @export
 call_and_name <- function(fn, x, ...)
@@ -54,7 +63,9 @@ call_and_name <- function(fn, x, ...)
 # - Recursive variables should just be a deparse, but exact details not too fussy (too rare)
 to_names <- function(x)
 {
-  if(is.double(x))
+  # special handling for double, complex only
+  # is.vector to prevent matching to POSIXct
+  if(is.double(x) && is.vector(x))
   {
     ifelse(is.na(x), NA_real_, sprintf("%.17g", x))
   } else if(is.complex(x))
@@ -99,14 +110,7 @@ dont_stop <- function(expr)
     subbed_expr <- c(brace, subbed_expr)
   }
   call_list <- as.list(subbed_expr)[-1L] # -1 to ignore brace again
-  names(call_list) <- vapply(
-    call_list, 
-    function(x) 
-    {
-      paste0(deparse(x), collapse = "")
-    }, 
-    character(1)
-  )
+  names(call_list) <- vapply(call_list, safe_deparse, character(1))
   
   handler <- function(e)
   {
@@ -145,14 +149,11 @@ dont_stop <- function(expr)
 #' @export
 get_name_in_parent <- function(x, escape_percent = TRUE)
 {  
-  xname <- paste0(
-    deparse(
-      do.call(
-        substitute, 
-        list(substitute(x), parent.frame())
-      )
-    ),
-    collapse = ""
+  xname <- safe_deparse(
+    do.call(
+      substitute, 
+      list(substitute(x), parent.frame())
+    )
   )
   if(escape_percent)
   {
@@ -322,6 +323,49 @@ parenthesize <- function(x,
 #' @export
 parenthesise <- parenthesize
 
+#' Print a variable and capture the output
+#' 
+#' Prints a variable and captures the output, collapsing the value to a single 
+#' string.
+#' @param x A variable.
+#' @param ... Arguments passed to \code{\link[base]{print}} methods.
+#' @return A string.
+#' @seealso \code{\link[base]{print}}, \code{\link[utils]{capture.output}}
+#' @examples
+#' # This is useful for including data frames in warnings or errors
+#' message("This is the sleep dataset:\n", print_and_capture(sleep))
+#' @importFrom utils capture.output
+#' @export
+print_and_capture <- function(x, ...)
+{
+  # call to enc2utf8 is a workaround for
+  # https://bugs.r-project.org/bugzilla3/show_bug.cgi?id=16539
+  enc2utf8(paste(capture.output(print(x, ...)), collapse = "\n"))
+}
+
+#' Safe version of deparse
+#' 
+#' A version of \code{\link[base]{deparse}} that is guaranteed to always return 
+#' a single string.
+#' @param expr Any R expression.
+#' @param ... Passed to \code{\link[base]{deparse}}.
+#' @return A character vector or length one.
+#' @note By default the RStudio IDE truncates output in the console at 1000 
+#' characters.  Consequently, if you use \code{safe_deparse} on large or complex
+#' objects, you won't see the full value. You can change the setting using
+#' Tools -> "Global Options..." -> Code -> Display -> Console -> "Limit length
+#' of lines displayed in console to:".
+#' @examples
+#' # safe_deparse only differs from deparse when the deparse string is longer
+#' # than width.cutoff
+#' deparse(CO2, width.cutoff = 500L) # has length 6
+#' safe_deparse(CO2)                 # has length 1
+#' @export
+safe_deparse <- function(expr, ...) 
+{
+  paste0(deparse(expr, width.cutoff = 500L, ...), collapse = "")
+}
+
 #' Strip all attributes from a variable
 #'
 #' Strips all the attributes from a variable.
@@ -368,9 +412,10 @@ use_first <- function(x, indexer = c("[[", "["), .xname = get_name_in_parent(x))
     return(x)
   }
   indexer <- match.fun(match.arg(indexer))
+  x1 <- indexer(x, 1L)
   warning(
-    sprintf("Only the first value of %s will be used.", .xname),
+    sprintf("Only the first value of %s (= %s) will be used.", .xname, as.character(x1)),
     call. = FALSE
   )
-  indexer(x, 1L)
+  x1
 }

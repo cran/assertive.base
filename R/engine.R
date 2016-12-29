@@ -1,8 +1,9 @@
 #' Throws an error if a condition isn't met
 #'
-#' The workhorse of the package.  If a condition isn't met, then an error
-#' is thrown.  This function is exported for use by package developers so
-#' that they can create their own assert functions.  
+#' The workhorse of the package that creates an assertion from a predicate.  
+#' If a condition isn't met, then an error is thrown.  This function is exported
+#' for use by package developers so that they can create their own assert 
+#' functions.  
 #'
 #' @param predicate Function that returns a logical value (possibly 
 #' a vector).
@@ -20,6 +21,24 @@
 #' in the input.
 #' @note Missing values are considered as \code{FALSE} for the purposes of
 #' whether or not an error is thrown.
+#' @examples 
+#' # Basic usage is like do.call; pass a predicate and the arguments to it.
+#' dont_stop(assert_engine(is_true, c(TRUE, FALSE, NA)))
+#' 
+#' # Customise the error message
+#' dont_stop(
+#'   assert_engine(is_true, c(TRUE, FALSE, NA), msg = "Not everything is true")
+#' )
+#' 
+#' # Only fail when no values match the predicate's conditions
+#' dont_stop(assert_engine(is_true, logical(3), what = "any"))
+#' 
+#' # You can use base predicates, but the error message isn't as informative
+#' dont_stop(assert_engine(is.matrix, 1:5))
+#' 
+#' # Reduce the severity of failure
+#' assert_engine(is_true, c(TRUE, FALSE, NA), severity = "message")
+#' 
 #' @export
 assert_engine <- function(predicate, ..., msg = "The assertion failed.", what = c("all", "any"), na_ignore = FALSE, severity = c("stop", "warning", "message", "none"))
 {
@@ -77,7 +96,14 @@ give_feedback <- function(handler_type, msg, predicate_name)
     message = assertionMessage
   )
   # Throw error/warning/message
-  caller <- sys.call(-3)
+  caller <- if(sys.nframe() >= 3)
+  {
+    sys.call(-3)
+  } else
+  {
+    NULL
+  }
+  
   # UTF-8 characters do not display correctly under Windows for some 
   # LC_CTYPE locale values, but there isn't much assertive can do about that.
   # http://stackoverflow.com/q/32696241/134830
