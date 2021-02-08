@@ -1,8 +1,8 @@
 Package: assertive.base
 Type: Package
 Title: A Lightweight Core of the 'assertive' Package
-Version: 0.0-8
-Date: 2021-01-24
+Version: 0.0-9
+Date: 2021-02-07
 Author: Richard Cotton [aut, cre],
   Sunkyu Choi [trl],
   Ivanka Skakun [trl],
@@ -58,6 +58,6 @@ Acknowledgments: Development of this package was partially funded by
 RoxygenNote: 7.1.1
 ByteCompile: true
 NeedsCompilation: no
-Packaged: 2021-01-24 18:55:14 UTC; richie
+Packaged: 2021-02-08 00:11:07 UTC; richie
 Repository: CRAN
-Date/Publication: 2021-01-24 19:20:02 UTC
+Date/Publication: 2021-02-08 05:50:02 UTC
